@@ -42,18 +42,16 @@ const views = {
         <p>Placeholder for user settings (e.g., notifications).</p>
     `,
     notFound: `
-        <h1>404 - Page Not Found</h1>
-        <p>The page you are looking for does not exist.</p>
+        <h1>Page Not Found</h1>
+        <p>Sorry, we couldn't find the page you're looking for.</p>
+        <p>You can return to the main page or connect with us on LinkedIn.</p>
+        <a href="https://www.linkedin.com/company/u-cloud24/" target="_blank" rel="noopener noreferrer">Visit our LinkedIn Page</a>
     `
 };
 
 // --- Multi-Site Logic ---
 function getSiteId() {
     // Determines site_id from the hostname (e.g., "site1.example.com" -> "site1").
-    // To test locally, you can edit your hosts file (e.g., /etc/hosts on Linux/macOS or
-    // C:\\Windows\\System32\\drivers\\etc\\hosts on Windows) to map hostnames to 127.0.0.1:
-    // 127.0.0.1 site1.localhost
-    // 127.0.0.1 site2.localhost
     const hostname = window.location.hostname;
     const parts = hostname.split('.');
 
@@ -78,15 +76,12 @@ function handleSendMessage() {
     addMessage('user', message);
     input.value = '';
 
-    // This is where you would make an API call to the n8n backend.
-    // The call would include the message, siteId, and the user's access token.
     console.log('Simulating API call with:', {
-        userId: authState.userInfo.sub, // The unique user ID from the token
+        userId: authState.userInfo.sub,
         siteId: siteId,
         message: message
     });
 
-    // Simulate AI response
     showTypingIndicator();
     setTimeout(() => {
         hideTypingIndicator();
@@ -198,7 +193,6 @@ function router() {
     }
     appRoot.innerHTML = viewHtml;
 
-    // Re-bind chat events if chat view is rendered
     if (path === '/app/chat') {
         document.getElementById('send-button').addEventListener('click', handleSendMessage);
         document.getElementById('message-input').addEventListener('keypress', (e) => {
