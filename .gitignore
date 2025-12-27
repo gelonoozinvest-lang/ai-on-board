@@ -1,0 +1,12 @@
+# IDE and environment files
+.idea/
+.vscode/
+.env
+*.pyc
+__pycache__/
+
+# Frontend configuration
+frontend/config.js
+
+# Node modules
+node_modules/
