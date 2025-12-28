@@ -1,14 +1,35 @@
+:root {
+    --background-color: #f4f4f9;
+    --text-color: #333;
+    --card-background: #fff;
+    --border-color: #ddd;
+    --primary-color: #007bff;
+    --primary-color-hover: #0056b3;
+    --input-background: #fff;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     margin: 0;
-    background-color: #f4f4f9;
-    color: #333;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    transition: background-color 0.2s, color 0.2s;
+}
+
+body.dark-mode {
+    --background-color: #121212;
+    --text-color: #e0e0e0;
+    --card-background: #1e1e1e;
+    --border-color: #444;
+    --primary-color: #008cff;
+    --primary-color-hover: #006bb3;
+    --input-background: #333;
 }
 
 nav {
-    background-color: #fff;
+    background-color: var(--card-background);
     padding: 1rem;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--border-color);
     display: flex;
     align-items: center;
     gap: 1rem;
@@ -16,7 +37,7 @@ nav {
 
 nav a {
     text-decoration: none;
-    color: #007bff;
+    color: var(--primary-color);
     font-weight: 500;
 }
 
@@ -28,14 +49,14 @@ nav a:hover {
     margin-left: auto;
     padding: 0.5rem 1rem;
     border: none;
-    background-color: #007bff;
+    background-color: var(--primary-color);
     color: white;
     border-radius: 5px;
     cursor: pointer;
 }
 
 #authButton:hover {
-    background-color: #0056b3;
+    background-color: var(--primary-color-hover);
 }
 
 main {
@@ -43,17 +64,17 @@ main {
 }
 
 #app-root h1 {
-    color: #333;
+    color: var(--text-color);
 }
 
-/* Chat UI placeholders */
+/* Chat UI */
 .chat-container {
     display: flex;
     flex-direction: column;
     height: 70vh;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-color);
     border-radius: 8px;
-    background: #fff;
+    background: var(--card-background);
 }
 
 .message-list {
@@ -65,22 +86,65 @@ main {
 .message-input {
     display: flex;
     padding: 1rem;
-    border-top: 1px solid #ccc;
+    border-top: 1px solid var(--border-color);
 }
 
 .message-input input {
     flex-grow: 1;
     padding: 0.5rem;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-color);
     border-radius: 5px;
+    background-color: var(--input-background);
+    color: var(--text-color);
 }
 
 .message-input button {
     margin-left: 0.5rem;
     padding: 0.5rem 1rem;
     border: none;
-    background-color: #007bff;
+    background-color: var(--primary-color);
     color: white;
     border-radius: 5px;
     cursor: pointer;
+}
+
+/* Settings Page */
+.settings-section {
+    background-color: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.settings-section h2 {
+    margin-top: 0;
+}
+
+.settings-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.settings-row label {
+    font-weight: 500;
+}
+
+.settings-row select, .settings-row button {
+    padding: 0.5rem;
+    border-radius: 5px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-background);
+    color: var(--text-color);
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    color: white;
+    border-color: #dc3545;
+}
+.btn-danger:hover {
+    background-color: #c82333;
 }

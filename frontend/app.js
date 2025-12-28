@@ -1,5 +1,5 @@
 // --- Configuration ---
-const { ZITADEL_ISSUER, ZITADEL_CLIENT_ID } = window.APP_CONFIG;
+const { ZITADEL_ISSUER, ZITADEL_CLIENT_ID, N8N_API_URL } = window.APP_CONFIG;
 
 // --- App State ---
 let authState = {
@@ -9,12 +9,16 @@ let authState = {
     userInfo: null,
 };
 const siteId = getSiteId();
+let userSettings = {
+    theme: 'light',
+    language: 'en'
+};
 
 // --- DOM Elements ---
 const appRoot = document.getElementById('app-root');
 const authButton = document.getElementById('authButton');
 
-// --- Views (unchanged) ---
+// --- Views ---
 const views = {
     chat: `
         <h1>Chat for Site: ${siteId}</h1>
@@ -39,7 +43,34 @@ const views = {
     `,
     settings: `
         <h1>Settings</h1>
-        <p>Placeholder for user settings (e.g., notifications).</p>
+        <div class="settings-section">
+            <h2>Appearance</h2>
+            <div class="settings-row">
+                <label for="theme-select">Theme</label>
+                <select id="theme-select">
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                </select>
+            </div>
+        </div>
+        <div class="settings-section">
+            <h2>Language</h2>
+            <div class="settings-row">
+                <label for="language-select">Language</label>
+                <select id="language-select">
+                    <option value="en">English</option>
+                    <option value="de">Deutsch</option>
+                    <option value="ru">Русский</option>
+                </select>
+            </div>
+        </div>
+        <div class="settings-section">
+            <h2>Data Management</h2>
+            <div class="settings-row">
+                <label>Clear Chat History</label>
+                <button id="clear-history-btn" class="btn-danger">Clear</button>
+            </div>
+        </div>
     `,
     notFound: `
         <h1>Page Not Found</h1>
@@ -49,150 +80,57 @@ const views = {
     `
 };
 
-// --- PKCE Helper Functions ---
-function generateRandomString(length) {
-    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let text = '';
-    for (let i = 0; i < length; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
+// --- Settings Logic ---
+function applySettings() {
+    // Apply theme
+    document.body.classList.toggle('dark-mode', userSettings.theme === 'dark');
+
+    // Update form elements on settings page if it's visible
+    const themeSelect = document.getElementById('theme-select');
+    if (themeSelect) themeSelect.value = userSettings.theme;
+
+    const langSelect = document.getElementById('language-select');
+    if (langSelect) langSelect.value = userSettings.language;
+}
+
+function loadSettings() {
+    const storedSettings = localStorage.getItem('userSettings');
+    if (storedSettings) {
+        userSettings = JSON.parse(storedSettings);
     }
-    return text;
+    applySettings();
 }
 
-async function generateCodeChallenge(verifier) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(verifier);
-    const digest = await window.crypto.subtle.digest('SHA-256', data);
-    return btoa(String.fromCharCode(...new Uint8Array(digest)))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '');
+function saveSettings() {
+    localStorage.setItem('userSettings', JSON.stringify(userSettings));
+    applySettings();
 }
 
-// --- Auth Logic (Authorization Code with PKCE) ---
-async function handleLogin() {
-    const codeVerifier = generateRandomString(64);
-    localStorage.setItem('code_verifier', codeVerifier);
-
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
-
-    const redirectUri = window.location.origin + window.location.pathname;
-    const authUrl = `${ZITADEL_ISSUER}/oauth/v2/authorize?` +
-        `client_id=${ZITADEL_CLIENT_ID}` +
-        `&response_type=code` + // <-- The correct response_type
-        `&scope=openid+email+profile` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&code_challenge=${codeChallenge}` +
-        `&code_challenge_method=S256`;
-
-    window.location.href = authUrl;
+function handleThemeChange(event) {
+    userSettings.theme = event.target.value;
+    saveSettings();
 }
 
-function handleLogout() {
-    const redirectUri = window.location.origin + window.location.pathname;
-    const logoutUrl = `${ZITADEL_ISSUER}/oidc/v1/end_session?` +
-        `id_token_hint=${authState.idToken}` +
-        `&post_logout_redirect_uri=${encodeURIComponent(redirectUri)}`;
-
-    localStorage.removeItem('authState');
-    localStorage.removeItem('code_verifier');
-    authState = { isAuthenticated: false, accessToken: null, idToken: null, userInfo: null };
-
-    window.location.href = logoutUrl;
+function handleLanguageChange(event) {
+    userSettings.language = event.target.value;
+    saveSettings();
+    // Here you might want to re-render parts of the UI with the new language
+    alert(`Language changed to ${userSettings.language}. UI refresh would be needed.`);
 }
 
-async function handleAuthCallback() {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-
-    if (!code) return;
-
-    const codeVerifier = localStorage.getItem('code_verifier');
-    if (!codeVerifier) {
-        console.error('Code verifier not found in storage.');
-        return;
-    }
-
-    const redirectUri = window.location.origin + window.location.pathname;
-    const tokenUrl = `${ZITADEL_ISSUER}/oauth/v2/token`;
-
-    try {
-        const response = await fetch(tokenUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            body: new URLSearchParams({
-                grant_type: 'authorization_code',
-                code: code,
-                redirect_uri: redirectUri,
-                client_id: ZITADEL_CLIENT_ID,
-                code_verifier: codeVerifier
-            })
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error_description || 'Failed to fetch token');
+function handleClearHistory() {
+    if (confirm("Are you sure you want to delete your entire chat history? This action cannot be undone.")) {
+        // In a real app, this would make an API call to the backend to delete records.
+        // For now, we'll just clear the visual chat list.
+        const messageList = document.getElementById('message-list');
+        if (messageList) {
+            messageList.innerHTML = '<p><em>AI:</em> Chat history cleared. How can I help you?</p>';
         }
-
-        const tokens = await response.json();
-
-        authState = {
-            isAuthenticated: true,
-            accessToken: tokens.access_token,
-            idToken: tokens.id_token,
-            userInfo: parseJwt(tokens.id_token)
-        };
-
-        localStorage.setItem('authState', JSON.stringify(authState));
-        localStorage.removeItem('code_verifier'); // Clean up verifier
-
-        // Clean the URL
-        window.history.replaceState({}, document.title, window.location.pathname);
-
-    } catch (error) {
-        console.error('Error exchanging code for token:', error);
-        // Clean up URL and state
-        window.history.replaceState({}, document.title, window.location.pathname);
+        alert("Chat history cleared.");
     }
 }
 
-function loadAuthState() {
-    const storedState = localStorage.getItem('authState');
-    if (storedState) {
-        authState = JSON.parse(storedState);
-    }
-}
-
-function updateUI() {
-    if (authState.isAuthenticated) {
-        authButton.textContent = 'Logout';
-        authButton.onclick = handleLogout;
-    } else {
-        authButton.textContent = 'Login';
-        authButton.onclick = handleLogin;
-    }
-}
-
-function parseJwt(token) {
-    try {
-        return JSON.parse(atob(token.split('.')[1]));
-    } catch (e) {
-        return null;
-    }
-}
-
-// --- Router and other functions (unchanged) ---
-function getSiteId() {
-    const hostname = window.location.hostname;
-    const parts = hostname.split('.');
-    if (parts.length > 1 && parts[0] !== 'localhost' && parts[0] !== 'www') {
-        return parts[0];
-    }
-    return "default_site";
-}
-
+// --- Chat Logic ---
 function handleSendMessage() {
     const input = document.getElementById('message-input');
     const message = input.value.trim();
@@ -203,14 +141,32 @@ function handleSendMessage() {
     }
     addMessage('user', message);
     input.value = '';
-    console.log('Simulating API call with:', { userId: authState.userInfo.sub, siteId: siteId, message: message });
     showTypingIndicator();
-    setTimeout(() => {
+    fetch(N8N_API_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authState.accessToken}`
+        },
+        body: JSON.stringify({ message: message, site_id: siteId, language: userSettings.language })
+    })
+    .then(response => {
         hideTypingIndicator();
-        addMessage('ai', `This is a simulated response to "${message}". The real AI is not connected yet.`);
-    }, 1500);
+        if (!response.ok) throw new Error(`Network response was not ok: ${response.statusText}`);
+        return response.json();
+    })
+    .then(data => {
+        if (data && data.reply) addMessage('ai', data.reply);
+        else throw new Error("Invalid response format from server.");
+    })
+    .catch(error => {
+        hideTypingIndicator();
+        console.error('There was a problem with the fetch operation:', error);
+        addMessage('ai', `Sorry, I encountered an error: ${error.message}. Please try again later.`);
+    });
 }
 
+// --- Helper functions (unchanged) ---
 function addMessage(role, text) {
     const messageList = document.getElementById('message-list');
     const p = document.createElement('p');
@@ -218,62 +174,120 @@ function addMessage(role, text) {
     messageList.appendChild(p);
     messageList.scrollTop = messageList.scrollHeight;
 }
-
 function showTypingIndicator() {
     const messageList = document.getElementById('message-list');
+    if (document.getElementById('typing-indicator')) return;
     const typingP = document.createElement('p');
     typingP.id = 'typing-indicator';
     typingP.innerHTML = '<em>AI is typing...</em>';
     messageList.appendChild(typingP);
     messageList.scrollTop = messageList.scrollHeight;
 }
-
 function hideTypingIndicator() {
     const indicator = document.getElementById('typing-indicator');
-    if (indicator) {
-        indicator.remove();
-    }
+    if (indicator) indicator.remove();
 }
 
+// --- Auth Logic (PKCE - unchanged) ---
+async function handleLogin() {
+    const codeVerifier = generateRandomString(64);
+    localStorage.setItem('code_verifier', codeVerifier);
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    const redirectUri = window.location.origin + window.location.pathname;
+    const authUrl = `${ZITADEL_ISSUER}/oauth/v2/authorize?client_id=${ZITADEL_CLIENT_ID}&response_type=code&scope=openid+email+profile&redirect_uri=${encodeURIComponent(redirectUri)}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+    window.location.href = authUrl;
+}
+function handleLogout() {
+    const redirectUri = window.location.origin + window.location.pathname;
+    const logoutUrl = `${ZITADEL_ISSUER}/oidc/v1/end_session?id_token_hint=${authState.idToken}&post_logout_redirect_uri=${encodeURIComponent(redirectUri)}`;
+    localStorage.removeItem('authState');
+    localStorage.removeItem('code_verifier');
+    authState = { isAuthenticated: false, accessToken: null, idToken: null, userInfo: null };
+    window.location.href = logoutUrl;
+}
+async function handleAuthCallback() {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    if (!code) return;
+    const codeVerifier = localStorage.getItem('code_verifier');
+    if (!codeVerifier) { console.error('Code verifier not found.'); return; }
+    const redirectUri = window.location.origin + window.location.pathname;
+    const tokenUrl = `${ZITADEL_ISSUER}/oauth/v2/token`;
+    try {
+        const response = await fetch(tokenUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ grant_type: 'authorization_code', code: code, redirect_uri: redirectUri, client_id: ZITADEL_CLIENT_ID, code_verifier: codeVerifier })
+        });
+        if (!response.ok) { const error = await response.json(); throw new Error(error.error_description || 'Failed to fetch token'); }
+        const tokens = await response.json();
+        authState = { isAuthenticated: true, accessToken: tokens.access_token, idToken: tokens.id_token, userInfo: parseJwt(tokens.id_token) };
+        localStorage.setItem('authState', JSON.stringify(authState));
+        localStorage.removeItem('code_verifier');
+        window.history.replaceState({}, document.title, window.location.pathname);
+    } catch (error) {
+        console.error('Error exchanging code for token:', error);
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+}
+function loadAuthState() {
+    const storedState = localStorage.getItem('authState');
+    if (storedState) authState = JSON.parse(storedState);
+}
+function updateUI() {
+    if (authState.isAuthenticated) {
+        authButton.textContent = 'Logout';
+        authButton.onclick = handleLogout;
+    } else {
+        authButton.textContent = 'Login';
+        authButton.onclick = handleLogin;
+    }
+}
+function parseJwt(token) { try { return JSON.parse(atob(token.split('.')[1])); } catch (e) { return null; } }
+async function generateCodeChallenge(v) { const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v)); return btoa(String.fromCharCode(...new Uint8Array(d))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''); }
+function generateRandomString(l) { const p = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'; let t = ''; for (let i = 0; i < l; i++) { t += p.charAt(Math.floor(Math.random() * p.length)); } return t; }
+
+// --- Router ---
+function getSiteId() {
+    const hostname = window.location.hostname;
+    const parts = hostname.split('.');
+    if (parts.length > 1 && parts[0] !== 'localhost' && parts[0] !== 'www') return parts[0];
+    return "default_site";
+}
 function router() {
     const path = window.location.hash.slice(1) || '/app/chat';
     let viewHtml;
-    if (path === '/app/chat') {
-        viewHtml = views.chat;
-    } else if (path === '/app/profile') {
-        viewHtml = authState.isAuthenticated ? views.profile() : '<h1>Please log in to see your profile.</h1>';
-    } else if (path === '/app/settings') {
-        viewHtml = views.settings;
-    } else {
-        viewHtml = views.notFound;
-    }
+    if (path === '/app/chat') viewHtml = views.chat;
+    else if (path === '/app/profile') viewHtml = authState.isAuthenticated ? views.profile() : '<h1>Please log in to see your profile.</h1>';
+    else if (path === '/app/settings') viewHtml = views.settings;
+    else viewHtml = views.notFound;
     appRoot.innerHTML = viewHtml;
+
+    // Re-bind events for the current view
     if (path === '/app/chat') {
         document.getElementById('send-button').addEventListener('click', handleSendMessage);
-        document.getElementById('message-input').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') handleSendMessage();
-        });
+        document.getElementById('message-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') handleSendMessage(); });
+    } else if (path === '/app/settings') {
+        document.getElementById('theme-select').addEventListener('change', handleThemeChange);
+        document.getElementById('language-select').addEventListener('change', handleLanguageChange);
+        document.getElementById('clear-history-btn').addEventListener('click', handleClearHistory);
+        // Set initial values
+        document.getElementById('theme-select').value = userSettings.theme;
+        document.getElementById('language-select').value = userSettings.language;
     }
 }
 
 // --- App Initialization ---
 async function init() {
     if (!ZITADEL_ISSUER || ZITADEL_ISSUER.includes('your-zitadel-issuer')) {
-        appRoot.innerHTML = '<h1>Configuration Error</h1><p>Please configure Zitadel details in <code>frontend/config.js</code>.</p>';
+        appRoot.innerHTML = '<h1>Configuration Error</h1><p>Please configure Zitadel and N8N details in <code>frontend/config.js</code>.</p>';
         return;
     }
-
-    // The order is important here!
-    // 1. Check for auth code in URL and exchange it for tokens.
+    loadSettings();
     await handleAuthCallback();
-
-    // 2. Load any existing state from storage.
     loadAuthState();
-
-    // 3. Render the UI based on the new state.
     router();
     updateUI();
-
     window.addEventListener('hashchange', router);
     console.log(`App initialized for site: "${siteId}"`);
 }
