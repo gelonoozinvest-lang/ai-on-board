@@ -20,6 +20,7 @@ This service will replace the need for the n8n workflow to have direct access to
 -   **Language:** Python 3.10+
 -   **Framework:** **FastAPI** (recommended for its speed and automatic API documentation).
 -   **Database:** **PostgreSQL** with the **`pgvector`** extension for vector similarity search.
+-   **Networking:** **Tailscale**. The service must be deployed within a Tailscale private network. It should **not** be exposed to the public internet. Communication between n8n and this service will occur exclusively over the Tailscale network.
 -   **Key Libraries:**
     -   `sqlalchemy` (for ORM)
     -   `alembic` (for database migrations)
@@ -57,7 +58,7 @@ This service will replace the need for the n8n workflow to have direct access to
 
 ### 4. API Endpoints
 
-The service must expose the following RESTful endpoints:
+**Note:** All endpoints should be accessible only via their Tailscale IP address or MagicDNS name.
 
 **`POST /documents`**
 -   **Action:** Adds a new knowledge document.
