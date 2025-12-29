@@ -1,91 +1,91 @@
-# Technical Specification (ТЗ) for GCP Infrastructure Repository
+# Техническое задание (ТЗ) для Репозитория Инфраструктуры GCP
 
-This document outlines the requirements for a dedicated Git repository that will manage the entire Google Cloud Platform (GCP) infrastructure for the AI Cabinet project using Terraform.
-
----
-
-### 1. Core Objective
-
-To define, create, and manage all necessary GCP resources for the AI Cabinet system using the "Infrastructure as Code" (IaC) paradigm with Terraform. This repository will be the single source of truth for the project's cloud infrastructure.
+Этот документ описывает требования к выделенному Git-репозиторию, который будет управлять всей инфраструктурой Google Cloud Platform (GCP) для проекта AI Cabinet с использованием Terraform.
 
 ---
 
-### 2. Repository Structure (Recommended)
+### 1. Основная цель
 
-A modular structure is required for clarity and reusability.
+Определить, создать и управлять всеми необходимыми ресурсами GCP для системы AI Cabinet, используя парадигму "Инфраструктура как код" (IaC) с Terraform. Этот репозиторий будет единственным источником истины для облачной инфраструктуры проекта.
+
+---
+
+### 2. Структура Репозитория (Рекомендуется)
+
+Требуется модульная структура для ясности и повторного использования.
 
 ```
 /
-├── main.tf         # Main file, orchestrates module creation
-├── variables.tf    # Defines input variables (project_id, region, etc.)
-├── outputs.tf      # Defines outputs (e.g., database instance names)
-├── terraform.tfvars.example # Example variables file
-├── .gitignore      # Ignores .tfstate, .tfvars, etc.
+├── main.tf         # Основной файл, оркеструет создание модулей
+├── variables.tf    # Определяет входные переменные (project_id, region и т.д.)
+├── outputs.tf      # Определяет выходные данные (например, имена экземпляров баз данных)
+├── terraform.tfvars.example # Пример файла переменных
+├── .gitignore      # Игнорирует .tfstate, .tfvars и т.д.
 └── modules/
     ├── cloud-sql/
-    │   └── main.tf   # Module for creating a Cloud SQL PostgreSQL instance
+    │   └── main.tf   # Модуль для создания экземпляра Cloud SQL PostgreSQL
     └── tailscale-gateway/
-        └── main.tf   # Module for creating the Tailscale gateway VM
+        └── main.tf   # Модуль для создания VM шлюза Tailscale
 ```
 
 ---
 
-### 3. Resources to be Created
+### 3. Создаваемые Ресурсы
 
-#### 3.1. Core Application Database
--   **Resource:** `Cloud SQL for PostgreSQL`.
--   **Purpose:** The master database for `users` and `sites` tables.
--   **Instance Size (Production):** `db-n2-standard-2` or similar.
--   **Settings:**
-    -   High Availability (Regional) must be **enabled**.
-    -   Automatic backups must be **enabled**.
-    -   **Private IP** must be enabled. Public IP must be **disabled**.
-    -   The `pgvector` extension is **not** required for this instance.
+#### 3.1. База данных основного приложения
+-   **Ресурс:** `Cloud SQL для PostgreSQL`.
+-   **Назначение:** Основная база данных для таблиц `users` и `sites`.
+-   **Размер экземпляра (Production):** `db-n2-standard-2` или аналогичный.
+-   **Настройки:**
+    -   Высокая доступность (Региональная) должна быть **включена**.
+    -   Автоматическое резервное копирование должно быть **включено**.
+    -   **Частный IP** должен быть включен. Публичный IP должен быть **отключен**.
+    -   Расширение `pgvector` **не требуется** для этого экземпляра.
 
-#### 3.2. RAG Service Database
--   **Resource:** `Cloud SQL for PostgreSQL`.
--   **Purpose:** The dedicated database for the RAG service, storing `chat_messages` and `knowledge_documents`.
--   **Instance Size (Production):** `db-n2-standard-4` or larger, optimized for CPU and RAM.
--   **Settings:**
-    -   High Availability (Regional) must be **enabled**.
-    -   **`pgvector` extension must be enabled** via database flags.
-    -   **Private IP** must be enabled. Public IP must be **disabled**.
+#### 3.2. База данных сервиса RAG
+-   **Ресурс:** `Cloud SQL для PostgreSQL`.
+-   **Назначение:** Выделенная база данных для сервиса RAG, хранящая `chat_messages` и `knowledge_documents`.
+-   **Размер экземпляра (Production):** `db-n2-standard-4` или больше, оптимизированный для ЦП и ОЗУ.
+-   **Настройки:**
+    -   Высокая доступность (Региональная) должна быть **включена**.
+    -   Расширение **`pgvector` должно быть включено** через флаги базы данных.
+    -   **Частный IP** должен быть включен. Публичный IP должен быть **отключен**.
 
-#### 3.3. Tailscale Gateway VM
--   **Resource:** `Compute Engine VM`.
--   **Purpose:** To act as a secure gateway, providing access to the Cloud SQL instances from the private Tailscale network.
--   **Instance Size:** `e2-micro` (or other cost-effective equivalent).
--   **Settings:**
-    -   The VM must be deployed in the same VPC as the Cloud SQL instances.
-    -   It must **not** have a public IP address.
-    -   A **startup script** must be used to:
-        1.  Install Tailscale.
-        2.  Authenticate and connect to the Tailscale network using an auth key.
-        3.  Install the Google Cloud SQL Auth Proxy.
-
----
-
-### 4. Networking and Security
-
--   **VPC:** All resources must be deployed within a single VPC network.
--   **Access:** All access to the databases from application services (n8n, RAG service) must be routed through the **Tailscale Gateway VM** and the **Cloud SQL Auth Proxy**. Direct connections to the database's private IP should be configured within the proxy.
--   **Firewall Rules:** Firewall rules should be configured to allow necessary internal traffic while restricting all external access.
+#### 3.3. VM шлюза Tailscale
+-   **Ресурс:** `Compute Engine VM`.
+-   **Назначение:** Действовать как безопасный шлюз, предоставляя доступ к экземплярам Cloud SQL из частной сети Tailscale.
+-   **Размер экземпляра:** `e2-micro` (или другой экономически эффективный эквивалент).
+-   **Настройки:**
+    -   VM должна быть развернута в том же VPC, что и экземпляры Cloud SQL.
+    -   У нее **не должно** быть публичного IP-адреса.
+    -   Должен использоваться **скрипт запуска** для:
+        1.  Установки Tailscale.
+        2.  Аутентификации и подключения к сети Tailscale с использованием ключа аутентификации.
+        3.  Установки Google Cloud SQL Auth Proxy.
 
 ---
 
-### 5. Configuration and Secrets Management
+### 4. Сеть и Безопасность
 
--   **Project ID & Region:** These should be defined as variables in `variables.tf` and provided via a `terraform.tfvars` file.
--   **`terraform.tfvars`:** This file will contain all sensitive data (GCP project ID, Tailscale auth key) and **must be included in `.gitignore`**.
--   **Service Account:** Terraform will require a GCP Service Account with appropriate permissions (`Cloud SQL Admin`, `Compute Admin`, etc.) to manage the resources. The credentials for this service account should be configured securely on the machine where Terraform commands are executed.
+-   **VPC:** Все ресурсы должны быть развернуты в одной сети VPC.
+-   **Доступ:** Весь доступ к базам данных из прикладных сервисов (n8n, сервис RAG) должен маршрутизироваться через **VM шлюза Tailscale** и **Cloud SQL Auth Proxy**. Прямые подключения к частному IP базы данных должны быть настроены внутри прокси.
+-   **Правила брандмауэра:** Правила брандмауэра должны быть настроены для разрешения необходимого внутреннего трафика, ограничивая при этом весь внешний доступ.
 
 ---
 
-### 6. Deployment Workflow
+### 5. Управление Конфигурацией и Секретами
 
-1.  Clone the infrastructure repository.
-2.  Create a `terraform.tfvars` file from the `terraform.tfvars.example` template and fill in the required values.
-3.  Authenticate with GCP (e.g., `gcloud auth application-default login`).
-4.  Run `terraform init` to initialize the workspace.
-5.  Run `terraform plan` to review the planned changes.
-6.  Run `terraform apply` to create or update the infrastructure.
+-   **Идентификатор проекта и регион:** Они должны быть определены как переменные в `variables.tf` и предоставлены через файл `terraform.tfvars`.
+-   **`terraform.tfvars`:** Этот файл будет содержать все конфиденциальные данные (идентификатор проекта GCP, ключ аутентификации Tailscale) и **должен быть включен в `.gitignore`**.
+-   **Сервисный аккаунт:** Terraform потребуется сервисный аккаунт GCP с соответствующими разрешениями (`Cloud SQL Admin`, `Compute Admin` и т.д.) для управления ресурсами. Учетные данные для этого сервисного аккаунта должны быть безопасно настроены на машине, где выполняются команды Terraform.
+
+---
+
+### 6. Рабочий процесс Развертывания
+
+1.  Клонируйте репозиторий инфраструктуры.
+2.  Создайте файл `terraform.tfvars` из шаблона `terraform.tfvars.example` и заполните необходимые значения.
+3.  Аутентифицируйтесь в GCP (например, `gcloud auth application-default login`).
+4.  Выполните `terraform init` для инициализации рабочего пространства.
+5.  Выполните `terraform plan` для просмотра запланированных изменений.
+6.  Выполните `terraform apply` для создания или обновления инфраструктуры.

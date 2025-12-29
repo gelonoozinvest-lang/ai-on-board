@@ -1,137 +1,150 @@
-# Technical Specification (ТЗ) for RAG (Retrieval-Augmented Generation) Service
+# Техническое задание (ТЗ) для Сервиса RAG (Retrieval-Augmented Generation)
 
-This document outlines the requirements for a standalone RAG microservice. This service will act as the "memory and knowledge base" for the AI Cabinet system.
-
----
-
-### 1. Core Objective
-
-To develop a Python-based microservice that provides contextual information to the main AI workflow (n8n). The service will manage two types of memory:
-
-1.  **Long-Term Knowledge:** A vector database of instructions, documents, and other contextual information.
-2.  **Short-Term Memory:** A rolling 30-day history of user conversations.
-
-This service will replace the need for the n8n workflow to have direct access to the PostgreSQL database for chat-related tasks.
+Этот документ описывает требования к автономному микросервису RAG. Этот сервис будет выступать в качестве "памяти и базы знаний" для системы AI Cabinet.
 
 ---
 
-### 2. Architecture & Technology Stack
+### 1. Основная цель
 
--   **Language:** Python 3.10+
--   **Framework:** **FastAPI** (recommended for its speed and automatic API documentation).
--   **Database:** **PostgreSQL** with the **`pgvector`** extension for vector similarity search.
--   **Networking:** **Tailscale**. The service must be deployed within a Tailscale private network. It should **not** be exposed to the public internet. Communication between n8n and this service will occur exclusively over the Tailscale network.
--   **Key Libraries:**
-    -   `sqlalchemy` (for ORM)
-    -   `alembic` (for database migrations)
-    -   `sentence-transformers` or `openai` (for generating text embeddings)
-    -   `uvicorn` (for running the FastAPI app)
+Разработать микросервис на Python, который предоставляет контекстную информацию основному рабочему процессу ИИ (n8n). Сервис будет управлять двумя типами памяти:
+
+1.  **Долгосрочные знания:** Векторная база данных инструкций, документов и другой контекстной информации.
+2.  **Краткосрочная память:** Скользящая 30-дневная история пользовательских разговоров.
+
+Этот сервис заменит необходимость прямого доступа рабочего процесса n8n к базе данных PostgreSQL для задач, связанных с чатом.
 
 ---
 
-### 3. Key Features
+### 2. Архитектура и Стек Технологий
 
-#### 3.1. Document & Instruction Management (Long-Term Knowledge)
-
--   The service must provide an API to add, update, and delete knowledge documents.
--   When a document is added, the service must:
-    1.  Split the document text into smaller, manageable chunks.
-    2.  Generate a vector embedding for each chunk using a sentence-transformer model.
-    3.  Store the chunk text and its corresponding vector in the database.
-
-#### 3.2. Chat History Management (Short-Term Memory)
-
--   The service must provide an API to save new chat messages.
--   **Data Retention Policy:** The service must automatically delete any chat messages older than **30 days**. This should be implemented as a scheduled background task (e.g., a daily cron job).
-
-#### 3.3. Context Retrieval
-
--   This is the primary function of the service. It must provide a single API endpoint that:
-    1.  Accepts a user's query, `user_id`, and `site_id`.
-    2.  Generates an embedding for the user's query.
-    3.  Performs a vector similarity search in the database to find the most relevant knowledge chunks for that query and `site_id`.
-    4.  Retrieves the last 5-10 messages from the conversation history for that `user_id` and `site_id`.
-    5.  Combines the retrieved knowledge and chat history into a single, formatted string of context.
-    6.  Returns this context string to the caller (the n8n workflow).
+-   **Язык:** Python 3.10+
+-   **Фреймворк:** **FastAPI** (рекомендуется за скорость и автоматическую документацию API).
+-   **База данных:** **PostgreSQL** с расширением **`pgvector`** для векторного поиска сходства.
+-   **Сеть:** **Tailscale**. Сервис должен быть развернут в частной сети Tailscale. Он **не должен** быть доступен из публичного интернета. Связь между n8n и этим сервисом будет осуществляться исключительно через сеть Tailscale.
+-   **Ключевые библиотеки:**
+    -   `sqlalchemy` (для ORM)
+    -   `alembic` (для миграций базы данных)
+    -   `sentence-transformers` или `openai` (для генерации текстовых эмбеддингов)
+    -   `uvicorn` (для запуска приложения FastAPI)
 
 ---
 
-### 4. API Endpoints
+### 3. Ключевые Особенности
 
-**Note:** All endpoints should be accessible only via their Tailscale IP address or MagicDNS name.
+#### 3.1. Управление Документами и Инструкциями (Долгосрочные знания)
+
+-   Сервис должен предоставлять API для добавления, обновления и удаления документов знаний.
+-   При добавлении документа сервис должен:
+    1.  Разделить текст документа на более мелкие, управляемые фрагменты.
+    2.  Сгенерировать векторное вложение для каждого фрагмента с использованием модели sentence-transformer.
+    3.  Сохранить текст фрагмента и соответствующий ему вектор в базе данных.
+
+#### 3.2. Управление Историей Чата (Краткосрочная память)
+
+-   Сервис должен предоставлять API для сохранения новых сообщений чата.
+-   **Политика хранения данных:** Сервис должен автоматически удалять все сообщения чата старше **30 дней**. Это должно быть реализовано как запланированная фоновая задача (например, ежедневное задание cron).
+
+#### 3.3. Извлечение Контекста
+
+-   Это основная функция сервиса. Он должен предоставлять единую конечную точку API, которая:
+    1.  Принимает запрос пользователя, `user_id`, и `site_id`.
+    2.  Генерирует вложение для запроса пользователя.
+    3.  Выполняет векторный поиск сходства в базе данных для нахождения наиболее релевантных фрагментов знаний для этого запроса и `site_id`.
+    4.  Извлекает последние 5-10 сообщений из истории разговора для этого `user_id` и `site_id`.
+    5.  Объединяет извлеченные знания и историю чата в единую, отформатированную строку контекста.
+    6.  Возвращает эту строку контекста вызывающей стороне (рабочему процессу n8n).
+
+---
+
+### 4. Конечные Точки API
+
+**Примечание:** Все конечные точки должны быть доступны только через их IP-адрес Tailscale или имя MagicDNS.
 
 **`POST /documents`**
--   **Action:** Adds a new knowledge document.
--   **Body:**
+-   **Действие:** Добавляет новый документ знаний.
+-   **Тело:**
     ```json
     {
       "site_id": "string",
-      "source": "string (e.g., filename or URL)",
-      "content": "string (full text of the document)"
+      "source": "string (например, имя файла или URL)",
+      "content": "string (полный текст документа)"
     }
     ```
--   **Response:** `201 Created` with the ID of the ingested document.
+-   **Ответ:** `201 Created` с ID загруженного документа.
 
 **`POST /chat-messages`**
--   **Action:** Saves a new message to the conversation history.
+-   **Действие:** Сохраняет новое сообщение в историю разговора.
 -   **Body:**
     ```json
     {
       "user_id": "string",
       "site_id": "string",
-      "role": "string ('user' or 'ai')",
+      "role": "string ('user' или 'ai')",
       "message": "string"
     }
     ```
--   **Response:** `201 Created`.
+-   **Ответ:** `201 Created`.
 
 **`POST /retrieve-context`**
--   **Action:** The main RAG endpoint. Retrieves context for a given query.
+-   **Действие:** Основная конечная точка RAG. Извлекает контекст для данного запроса.
 -   **Body:**
     ```json
     {
       "user_id": "string",
       "site_id": "string",
-      "query": "string (the user's current message)"
+      "query": "string (текущее сообщение пользователя)"
     }
     ```
--   **Response:** `200 OK` with a JSON body:
+-   **Ответ:** `200 OK` с JSON-телом:
     ```json
     {
-      "context": "A single string containing formatted knowledge chunks and recent chat history."
+      "context": "Единая строка, содержащая отформатированные фрагменты знаний и недавнюю историю чата."
     }
     ```
 
-**`DELETE /chat-messages/cleanup`** (Protected Endpoint)
--   **Action:** Manually triggers the cleanup of chat messages older than 30 days. To be called by a scheduler.
--   **Response:** `200 OK` with a summary of the cleanup.
+**`DELETE /chat-messages/cleanup`** (Защищенная конечная точка)
+-   **Действие:** Вручную запускает очистку сообщений чата старше 30 дней. Должна вызываться планировщиком.
+-   **Ответ:** `200 OK` со сводкой очистки.
 
 ---
 
-### 5. Database Schema
+### 5. Схема Базы Данных
 
-The service will use the following tables. Alembic should be used to manage migrations.
+Сервис будет использовать следующие таблицы. Для управления миграциями должен использоваться Alembic.
 
-#### Table: `knowledge_documents`
-Stores the vectorized chunks of long-term knowledge.
+#### Таблица: `knowledge_documents`
+Хранит векторизованные фрагменты долгосрочных знаний.
 
-| Column      | Type                      | Description                               |
+| Колонка     | Тип                       | Описание                                  |
 | ----------- | ------------------------- | ----------------------------------------- |
-| `id`        | `uuid`                    | **Primary Key.**                          |
-| `site_id`   | `string`                  | Scopes the knowledge to a specific site.  |
-| `source`    | `string`                  | The original source of the document.      |
-| `content`   | `text`                    | The raw text of the document chunk.       |
-| `embedding` | `vector(dimension)`       | **pgvector type.** The embedding of the content. |
-| `created_at`| `timestamp`               | Timestamp of creation.                    |
+| `id`        | `uuid`                    | **Первичный ключ.**                       |
+| `site_id`   | `string`                  | Ограничивает знания конкретным сайтом.    |
+| `source`    | `string`                  | Исходный источник документа.              |
+| `content`   | `text`                    | Необработанный текст фрагмента документа. |
+| `embedding` | `vector(dimension)`       | **Тип pgvector.** Вложение содержимого.   |
+| `created_at`| `timestamp`               | Отметка времени создания.                 |
 
-#### Table: `chat_messages`
-(This can be the same table as used by the main application).
+#### Таблица: `chat_messages`
+(Это может быть та же таблица, что используется основным приложением).
 
-| Column      | Type        | Description                               |
+| Колонка     | Тип         | Описание                                  |
 | ----------- | ----------- | ----------------------------------------- |
-| `id`        | `uuid`      | **Primary Key.**                          |
-| `user_id`   | `string`    | User ID from the Zitadel JWT (`sub` claim). |
-| `site_id`   | `string`    | **Foreign Key** to `sites.site_id`.       |
-| `role`      | `string`    | 'user' or 'ai'.                           |
-| `message`   | `text`      | The content of the message.               |
-| `timestamp` | `timestamp` | **Crucial for the 30-day retention policy.** |
+| `id`        | `uuid`      | **Первичный ключ.**                       |
+| `user_id`   | `string`    | ID пользователя из JWT Zitadel (`sub` claim). |
+| `site_id`   | `string`    | **Внешний ключ** к `sites.site_id`.       |
+| `role`      | `string`    | 'user' или 'ai'.                          |
+| `message`   | `text`      | Содержимое сообщения.                     |
+| `timestamp` | `timestamp` | **Критически важно для политики хранения 30 дней.** |
+
+#### Таблица: `ai_agent_instructions`
+Хранит системные инструкции для AI агентов, специфичные для сайта или ресурса.
+
+| Колонка           | Тип         | Описание                                  |
+| ----------------- | ----------- | ----------------------------------------- |
+| `id`              | `uuid`      | **Первичный ключ.**                       |
+| `site_id`         | `string`    | **Внешний ключ** к `sites.site_id`. Связывает инструкцию с конкретным сайтом. |
+| `resource_name`   | `string`    | Уникальное имя ресурса/агента (например, "Sales Agent", "Support Chatbot"). |
+| `instruction_text`| `text`      | Полный текст системной инструкции для AI. |
+| `version`         | `string`    | Версия инструкции (необязательно).        |
+| `created_at`      | `timestamp` | Отметка времени создания.                 |
+| `updated_at`      | `timestamp` | Отметка времени последнего обновления.    |

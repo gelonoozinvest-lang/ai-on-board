@@ -1,137 +1,171 @@
-# Technical Specification (ТЗ) for AI Cabinet - Backend (n8n)
+# Техническое задание (ТЗ) для AI Кабинета - Бэкенд (n8n)
 
-This document outlines the backend tasks to be implemented on the n8n platform, which serves as the API for the AI Cabinet system.
-
----
-
-### 1. Core Objective
-
-To create a secure n8n workflow that acts as a backend API. This API will receive messages from a user, process them using an AI model, interact with a PostgreSQL database (Supabase) and HubSpot CRM, and return a response to the user.
+Этот документ описывает задачи бэкенда, которые должны быть реализованы на платформе n8n, служащей API для системы AI Кабинета.
 
 ---
 
-### 2. API Endpoint (n8n Webhook)
+### 1. Основная цель
 
--   **Trigger:** The workflow must be triggered by an n8n **Webhook** node.
--   **Method:** The webhook should be configured to accept `POST` requests.
--   **Input from Frontend:** The webhook will receive a JSON body with the following structure:
+Создать безопасный рабочий процесс n8n, который будет действовать как бэкенд API. Этот API будет получать сообщения от пользователя, обрабатывать их с использованием модели ИИ, взаимодействовать с базой данных PostgreSQL (Supabase) и CRM HubSpot, а затем возвращать ответ пользователю.
+
+---
+
+### 2. Конечная точка API (Webhook n8n)
+
+-   **Триггер:** Рабочий процесс должен запускаться узлом n8n **Webhook**.
+-   **Метод:** Вебхук должен быть настроен на прием `POST` запросов.
+-   **Ввод с фронтенда:** Вебхук будет получать JSON-тело следующей структуры:
     ```json
     {
-      "message": "User's message text",
-      "site_id": "The ID of the site, e.g., 'default_site'"
+      "message": "Текст сообщения пользователя",
+      "site_id": "Идентификатор сайта, например, 'default_site'"
     }
     ```
--   **Deployment:** The webhook URL will be exposed to the internet securely via a **Cloudflare Tunnel**.
+-   **Развертывание:** URL вебхука будет безопасно доступен через Интернет через **Cloudflare Tunnel**.
 
 ---
 
-### 3. Authentication (Zitadel JWT Validation)
+### 3. Аутентификация (Валидация JWT Zitadel)
 
-This is a critical security requirement. The API must not process any request that is not properly authenticated.
+Это критически важное требование безопасности. API не должен обрабатывать запросы, которые не прошли надлежащую аутентификацию.
 
--   **Requirement:** Every incoming request to the webhook must include an `Authorization: Bearer <accessToken>` header.
--   **Implementation:**
-    1.  Immediately after the Webhook node, add a step to extract the `accessToken` from the header.
-    2.  **Validate the Token:** The workflow must validate the JWT `accessToken`. This involves:
-        -   Fetching the public keys (JWKS) from the Zitadel `jwks_uri` endpoint (`https://<your-zitadel-domain>/oauth/v2/keys`).
-        -   Verifying the token's signature against these keys.
-        -   Checking the token's expiration (`exp`) and issuer (`iss`).
-    3.  **On Success:** If the token is valid, extract the `sub` claim. This is the unique `user_id`.
-    4.  **On Failure:** If the token is missing or invalid, the workflow must immediately stop and return an `HTTP 401 Unauthorized` error.
-
----
-
-### 4. Database Logic (PostgreSQL / Supabase)
-
-The workflow needs to read from and write to the PostgreSQL database.
-
--   **Connection:** Configure a connection to the Supabase database using the provided credentials.
--   **Tasks:**
-    1.  **Fetch Site Configuration:** Using the `site_id` from the webhook input, query the `sites` table to retrieve the configuration for the current site, especially the `ai_prompt`.
-    2.  **Fetch Chat History:** Before calling the AI, retrieve the last 5-10 messages for the current `user_id` and `site_id` from the `chat_messages` table to provide context to the AI.
-    3.  **Save User Message:** Insert the user's incoming message into the `chat_messages` table (`role: 'user'`).
-    4.  **Save AI Response:** After the AI generates a response, insert it into the `chat_messages` table (`role: 'ai'`).
+-   **Требование:** Каждый входящий запрос к вебхуку должен содержать заголовок `Authorization: Bearer <accessToken>`.
+-   **Реализация:**
+    1.  Сразу после узла Webhook добавьте шаг для извлечения `accessToken` из заголовка.
+    2.  **Валидация токена:** Рабочий процесс должен валидировать JWT `accessToken`. Это включает:
+        -   Получение публичных ключей (JWKS) из конечной точки Zitadel `jwks_uri` (`https://<ваш-домен-zitadel>/oauth/v2/keys`).
+        -   Проверку подписи токена с использованием этих ключей.
+        -   Проверку срока действия токена (`exp`) и издателя (`iss`).
+    3.  **В случае успеха:** Если токен действителен, извлеките утверждение `sub`. Это уникальный `user_id`.
+    4.  **В случае неудачи:** Если токен отсутствует или недействителен, рабочий процесс должен немедленно остановиться и вернуть ошибку `HTTP 401 Unauthorized`.
 
 ---
 
-### 5. AI Logic (OpenAI / Anthropic)
+### 4. Логика базы данных (PostgreSQL / Supabase)
 
--   **Connection:** Configure the appropriate node (e.g., OpenAI node) with the necessary API keys.
--   **Implementation:**
-    1.  **Construct the Prompt:** Create a prompt for the AI model. This prompt must include:
-        -   The system prompt (`ai_prompt`) fetched from the `sites` table.
-        -   The recent chat history fetched from the database.
-        -   The user's latest message.
-    2.  **Call the AI API:** Send the constructed prompt to the AI model.
-    3.  **Process the Response:** Receive the text response from the AI.
+Рабочий процесс должен читать и записывать данные в базу данных PostgreSQL.
+
+-   **Подключение:** Настройте подключение к базе данных Supabase, используя предоставленные учетные данные.
+-   **Задачи:**
+    1.  **Получение конфигурации сайта:** Используя `site_id` из входных данных вебхука, запросите таблицу `sites` для получения конфигурации текущего сайта, особенно `ai_prompt`.
+    2.  **Получение истории чата:** Перед вызовом ИИ получите последние 5-10 сообщений для текущего `user_id` и `site_id` из таблицы `chat_messages`, чтобы предоставить контекст ИИ.
+    3.  **Сохранение сообщения пользователя:** Вставьте входящее сообщение пользователя в таблицу `chat_messages` (`role: 'user'`).
+    4.  **Сохранение ответа ИИ:** После того как ИИ сгенерирует ответ, вставьте его в таблицу `chat_messages` (`role: 'ai'`).
 
 ---
 
-### 6. HubSpot CRM Logic
+### 5. Логика ИИ (OpenAI / Anthropic)
 
--   **Connection:** Configure the HubSpot node with the necessary API credentials.
--   **Tasks:**
-    1.  **Check/Create Contact:**
-        -   Use the `user_id` (from the token) to check if a contact with a matching `ucloud_user_id` already exists in HubSpot.
-        -   If not, create a new contact.
-        -   If it exists, update it.
-    2.  **Update Contact Properties:** Populate the custom properties on the HubSpot contact record as defined in the main `Task.md`:
+-   **Подключение:** Настройте соответствующий узел (например, узел OpenAI) с необходимыми ключами API.
+-   **Реализация:**
+    1.  **Формирование промпта:** Создайте промпт для модели ИИ. Этот промпт должен включать:
+        -   Системный промпт (`ai_prompt`), полученный из таблицы `sites`.
+        -   Недавнюю историю чата, полученную из базы данных.
+        -   Последнее сообщение пользователя.
+    2.  **Вызов API ИИ:** Отправьте сформированный промпт модели ИИ.
+    3.  **Обработка ответа:** Получите текстовый ответ от ИИ.
+
+---
+
+### 6. Логика CRM HubSpot
+
+-   **Подключение:** Настройте узел HubSpot с необходимыми учетными данными API.
+-   **Задачи:**
+    1.  **Проверка/Создание контакта:**
+        -   Используйте `user_id` (из токена), чтобы проверить, существует ли контакт с соответствующим `ucloud_user_id` в HubSpot.
+        -   Если нет, создайте новый контакт.
+        -   Если существует, обновите его.
+    2.  **Обновление свойств контакта:** Заполните пользовательские свойства записи контакта HubSpot, как определено в основном `Task.md`:
         -   `ucloud_user_id`
         -   `ucloud_site_id`
-        -   `ucloud_status` (e.g., set to 'engaged' on first message)
+        -   `ucloud_status` (например, установить 'engaged' при первом сообщении)
         -   `ucloud_first_message` / `ucloud_last_message`
 
 ---
 
-### 7. Final Output
+### 7. Окончательный вывод
 
--   **On Success:** The workflow should end by sending a `200 OK` response back to the frontend. The body of the response should be a JSON object containing the AI's reply:
+-   **В случае успеха:** Рабочий процесс должен завершиться отправкой ответа `200 OK` обратно на фронтенд. Тело ответа должно быть JSON-объектом, содержащим ответ ИИ:
     ```json
     {
-      "reply": "The full text of the AI's response."
+      "reply": "Полный текст ответа ИИ."
     }
     ```
--   **On Error:** The workflow should handle errors gracefully and return appropriate HTTP status codes (e.g., 401, 500).
+-   **В случае ошибки:** Рабочий процесс должен корректно обрабатывать ошибки и возвращать соответствующие коды состояния HTTP (например, 401, 500).
 
 ---
 
-### Appendix: Database Schema
+### 8. Синхронизация данных (Google Таблицы через n8n)
 
-The following tables are expected to exist in the PostgreSQL database.
+Для удобства управления конфигурацией и инструкциями AI агентов, n8n будет использоваться для синхронизации данных из Google Таблиц в соответствующие таблицы PostgreSQL. Ниже представлена ожидаемая структура этих таблиц.
 
-#### Table: `sites`
-Stores configuration for each site.
+#### 8.1. Google Таблица: `Sites Configuration`
+Эта таблица будет использоваться для синхронизации данных с таблицей `sites` в основной базе данных.
 
-| Column             | Type        | Description                               |
+| Колонка            | Тип (пример) | Описание                                  |
+| ------------------ | ------------ | ----------------------------------------- |
+| `site_id`          | `string`     | **Уникальный идентификатор сайта.** Должен совпадать с `site_id` в БД. |
+| `domain`           | `string`     | Доменное имя, связанное с сайтом.         |
+| `ai_script_id`     | `string`     | Идентификатор для конкретного скрипта или версии ИИ. |
+| `ai_prompt`        | `text`       | Системный промпт для модели ИИ.           |
+| `brand_name`       | `string`     | Название бренда для сайта.                |
+| `language`         | `string`     | Язык для ИИ (например, 'en', 'de').       |
+| `hubspot_pipeline` | `string`     | Целевой ID конвейера HubSpot.             |
+| `hubspot_stage`    | `string`     | Целевой ID стадии HubSpot.                |
+| `created_at`       | `timestamp`  | Отметка времени создания (может генерироваться n8n). |
+
+#### 8.2. Google Таблица: `AI Agent Instructions`
+Эта таблица будет использоваться для синхронизации данных с таблицей `ai_agent_instructions` в базе данных RAG сервиса.
+
+| Колонка           | Тип (пример) | Описание                                  |
+| ----------------- | ------------ | ----------------------------------------- |
+| `id`              | `uuid`       | **Уникальный идентификатор инструкции.** Может генерироваться n8n. |
+| `site_id`         | `string`     | **Идентификатор сайта.** Связывает инструкцию с конкретным сайтом. |
+| `resource_name`   | `string`     | **Уникальное имя ресурса/агента** (например, "Sales Agent", "Support Chatbot"). |
+| `instruction_text`| `text`       | Полный текст системной инструкции для AI. |
+| `version`         | `string`     | Версия инструкции (необязательно).        |
+| `created_at`      | `timestamp`  | Отметка времени создания (может генерироваться n8n). |
+| `updated_at`      | `timestamp`  | Отметка времени последнего обновления (может генерироваться n8n). |
+
+---
+
+### Приложение: Схема базы данных
+
+Ожидается, что в базе данных PostgreSQL будут существовать следующие таблицы.
+
+#### Таблица: `sites`
+Хранит конфигурацию для каждого сайта.
+
+| Колонка            | Тип         | Описание                                  |
 | ------------------ | ----------- | ----------------------------------------- |
-| `site_id`          | `string`    | **Primary Key.** Unique identifier for the site. |
-| `domain`           | `string`    | The domain name associated with the site. |
-| `ai_script_id`     | `string`    | ID for a specific AI script or version.   |
-| `ai_prompt`        | `text`      | The system prompt for the AI model.       |
-| `brand_name`       | `string`    | The brand name for the site.              |
-| `language`         | `string`    | Language for the AI (e.g., 'en', 'de').   |
-| `hubspot_pipeline` | `string`    | Target HubSpot pipeline ID.               |
-| `hubspot_stage`    | `string`    | Target HubSpot stage ID.                  |
-| `created_at`       | `timestamp` | Timestamp of creation.                    |
+| `site_id`          | `string`    | **Первичный ключ.** Уникальный идентификатор сайта. |
+| `domain`           | `string`    | Доменное имя, связанное с сайтом.         |
+| `ai_script_id`     | `string`    | Идентификатор для конкретного скрипта или версии ИИ. |
+| `ai_prompt`        | `text`      | Системный промпт для модели ИИ.           |
+| `brand_name`       | `string`    | Название бренда для сайта.                |
+| `language`         | `string`    | Язык для ИИ (например, 'en', 'de').       |
+| `hubspot_pipeline` | `string`    | Целевой ID конвейера HubSpot.             |
+| `hubspot_stage`    | `string`    | Целевой ID стадии HubSpot.                |
+| `created_at`       | `timestamp` | Отметка времени создания.                 |
 
-#### Table: `chat_messages`
-Stores the history of all conversations.
+#### Таблица: `chat_messages`
+Хранит историю всех разговоров.
 
-| Column      | Type        | Description                               |
+| Колонка     | Тип         | Описание                                  |
 | ----------- | ----------- | ----------------------------------------- |
-| `id`        | `uuid`      | **Primary Key.** Unique message ID.       |
-| `user_id`   | `string`    | User ID from the Zitadel JWT (`sub` claim). |
-| `site_id`   | `string`    | **Foreign Key** to `sites.site_id`.       |
-| `role`      | `string`    | Who sent the message: 'user' or 'ai'.     |
-| `message`   | `text`      | The content of the message.               |
-| `timestamp` | `timestamp` | Timestamp of the message.                 |
+| `id`        | `uuid`      | **Первичный ключ.** Уникальный ID сообщения. |
+| `user_id`   | `string`    | ID пользователя из JWT Zitadel (`sub` claim). |
+| `site_id`   | `string`    | **Внешний ключ** к `sites.site_id`.       |
+| `role`      | `string`    | Кто отправил сообщение: 'user' или 'ai'.  |
+| `message`   | `text`      | Содержимое сообщения.                     |
+| `timestamp` | `timestamp` | Отметка времени сообщения.                |
 
-#### Table: `users`
-Optional table to store user metadata.
+#### Таблица: `users`
+Необязательная таблица для хранения метаданных пользователя.
 
-| Column       | Type        | Description                               |
+| Колонка      | Тип         | Описание                                  |
 | ------------ | ----------- | ----------------------------------------- |
-| `user_id`    | `string`    | **Primary Key.** User ID from Zitadel (`sub`). |
-| `email`      | `string`    | User's email address.                     |
-| `first_seen` | `timestamp` | When the user was first created.          |
-| `last_seen`  | `timestamp` | When the user was last active.            |
+| `user_id`    | `string`    | **Первичный ключ.** ID пользователя из Zitadel (`sub`). |
+| `email`      | `string`    | Адрес электронной почты пользователя.      |
+| `first_seen` | `timestamp` | Когда пользователь был впервые замечен.    |
+| `last_seen`  | `timestamp` | Когда пользователь был последний раз активен. |
